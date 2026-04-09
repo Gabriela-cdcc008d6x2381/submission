@@ -4,8 +4,14 @@ import streamlit as st
 
 st.set_page_config(page_title="Bike Sharing Dashboard", layout="wide")
 
-df = pd.read_csv("main_data.csv")
+
+# LOAD DATA
+
+df = pd.read_csv("C:\\Users\\X1 PRO\\Downloads\\dicoding\\Coding Camp\\Fundamental Analisa Data\\Submission\\dashboard\\main_data.csv")
 df['date'] = pd.to_datetime(df['date'])
+
+
+# MAPPING LABEL
 
 weather_map = {
     1: "Clear",
@@ -31,14 +37,24 @@ df['weather_label'] = df['weather'].map(weather_map)
 df['season_label'] = df['season'].map(season_map)
 df['weekday_label'] = df['weekday'].map(weekday_map)
 
+# split data
 day_df = df[df['data_type'] == 'day']
 hour_df = df[df['data_type'] == 'hour']
+
+
+# SIDEBAR
 
 min_date = df['date'].min()
 max_date = df['date'].max()
 
 with st.sidebar:
-    st.header("📊 Filter Data")
+    st.header("Filter Data")
+
+    # PILIH TIPE DATA (FITUR BARU)
+    data_choice = st.radio(
+        "Pilih Tipe Analisis",
+        ["📅 Daily Data", "⏱️ Hourly Data"]
+    )
 
     start_date, end_date = st.date_input(
         "Pilih Rentang Waktu",
@@ -47,11 +63,18 @@ with st.sidebar:
         max_value=max_date
     )
 
-    weather_options = ["Clear", "Mist / Cloudy", "Light Rain / Snow", "Heavy Rain / Storm"]
-    selected_weather = st.multiselect("Pilih Cuaca", weather_options, default=weather_options)
+    weather_options = list(weather_map.values())
+    selected_weather = st.multiselect(
+        "Pilih Cuaca", weather_options, default=weather_options
+    )
 
-    season_options = ["Spring", "Summer", "Fall", "Winter"]
-    selected_season = st.multiselect("Pilih Season", season_options, default=season_options)
+    season_options = list(season_map.values())
+    selected_season = st.multiselect(
+        "Pilih Season", season_options, default=season_options
+    )
+
+
+# FILTER DATA
 
 day_filtered = day_df[
     (day_df['date'] >= pd.to_datetime(start_date)) &
@@ -67,21 +90,36 @@ hour_filtered = hour_df[
     (hour_df['season_label'].isin(selected_season))
 ]
 
+# pilih data aktif
+if data_choice == "📅 Daily Data":
+    active_df = day_filtered
+else:
+    active_df = hour_filtered
+
+
+# HANDLE DATA KOSONG
+
+if active_df.empty:
+    st.warning("Data tidak tersedia untuk filter yang dipilih!")
+    st.stop()
+
+
+# HEADER
+
 st.title("🚲 Bike Sharing Dashboard")
 st.caption("Analisis penggunaan sepeda 2011–2012")
 
+
+# METRIC
+
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Rentals", int(day_filtered['total_count'].sum()))
-col2.metric("Rata-rata Harian", int(day_filtered['total_count'].mean()))
-col3.metric("Max Rentals", int(day_filtered['total_count'].max()))
+col1.metric("Total Rentals", int(active_df['total_count'].sum()))
+col2.metric("Average", int(active_df['total_count'].mean()))
+col3.metric("Max Rentals", int(active_df['total_count'].max()))
 
-# ========================
-# HANDLE DATA KOSONG
-# ========================
-if day_filtered.empty or hour_filtered.empty:
-    st.warning("Data tidak tersedia untuk filter yang dipilih ⚠️")
-    st.stop()
+
+# PERTANYAAN 1
 
 st.header("1. Pengaruh Cuaca terhadap Penyewaan")
 
@@ -89,56 +127,63 @@ col1, col2 = st.columns(2)
 
 with col1:
     fig, ax = plt.subplots()
-    ax.scatter(day_filtered['temp'], day_filtered['total_count'])
+    ax.scatter(active_df['temp'], active_df['total_count'])
     ax.set_title("Temperature vs Total Rentals")
-    ax.set_xlabel("Temperature")
-    ax.set_ylabel("Total Rentals")
     st.pyplot(fig)
 
 with col2:
     fig, ax = plt.subplots()
-    ax.scatter(day_filtered['humidity'], day_filtered['total_count'])
+    ax.scatter(active_df['humidity'], active_df['total_count'])
     ax.set_title("Humidity vs Total Rentals")
-    ax.set_xlabel("Humidity")
-    ax.set_ylabel("Total Rentals")
     st.pyplot(fig)
 
 fig, ax = plt.subplots()
-avg_weather = day_filtered.groupby('weather_label')['total_count'].mean().reindex(weather_options)
+avg_weather = active_df.groupby('weather_label')['total_count'].mean().reindex(weather_options)
 avg_weather.plot(kind='bar', ax=ax)
 ax.set_title("Average Rentals by Weather")
 st.pyplot(fig)
 
+
+# PERTANYAAN 2
+
 st.header("2. Pola Jam & Hari")
 
-hour_pattern = hour_filtered.groupby(['hour', 'workingday'])['total_count'].mean().unstack()
+if data_choice == "⏱️ Hourly Data":
+    hour_pattern = active_df.groupby(['hour', 'workingday'])['total_count'].mean().unstack()
 
-fig, ax = plt.subplots()
-hour_pattern.plot(ax=ax)
-ax.set_title("Hourly Pattern (Workingday vs Weekend)")
-st.pyplot(fig)
+    fig, ax = plt.subplots()
+    hour_pattern.plot(ax=ax)
+    ax.set_title("Hourly Pattern (Workingday vs Weekend)")
+    st.pyplot(fig)
 
-order_day = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    order_day = list(weekday_map.values())
 
-fig, ax = plt.subplots()
-avg_weekday = hour_filtered.groupby('weekday_label')['total_count'].mean().reindex(order_day)
-avg_weekday.plot(kind='bar', ax=ax)
-ax.set_title("Average Rentals by Weekday")
-st.pyplot(fig)
+    fig, ax = plt.subplots()
+    avg_weekday = active_df.groupby('weekday_label')['total_count'].mean().reindex(order_day)
+    avg_weekday.plot(kind='bar', ax=ax)
+    ax.set_title("Average Rentals by Weekday")
+    st.pyplot(fig)
+
+else:
+    st.info("Analisis jam hanya tersedia untuk Hourly Data")
+
+
+# PERTANYAAN 3
 
 st.header("3. Casual vs Registered Users")
 
-user_hour = hour_filtered.groupby('hour')[['casual', 'registered']].mean()
+if data_choice == "⏱️ Hourly Data":
+    user_hour = active_df.groupby('hour')[['casual', 'registered']].mean()
 
-fig, ax = plt.subplots()
-user_hour.plot(ax=ax)
-ax.set_title("Casual vs Registered per Hour")
-st.pyplot(fig)
+    fig, ax = plt.subplots()
+    user_hour.plot(ax=ax)
+    ax.set_title("Casual vs Registered per Hour")
+    st.pyplot(fig)
 
-user_season = day_filtered.groupby('season_label')[['casual', 'registered']].mean().reindex(season_options)
+else:
+    user_season = active_df.groupby('season_label')[['casual', 'registered']].mean().reindex(season_options)
 
-fig, ax = plt.subplots()
-user_season.plot(kind='bar', ax=ax)
-ax.set_title("Casual vs Registered per Season")
-st.pyplot(fig)
-
+    fig, ax = plt.subplots()
+    user_season.plot(kind='bar', ax=ax)
+    ax.set_title("Casual vs Registered per Season")
+    st.pyplot(fig)
